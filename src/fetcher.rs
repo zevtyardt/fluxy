@@ -18,8 +18,8 @@ use crate::{
 };
 
 pub struct ProxyFetcher {
-    sender: mpsc::SyncSender<Proxy>,
-    receiver: mpsc::Receiver<Proxy>,
+    sender: mpsc::SyncSender<Option<Proxy>>,
+    receiver: mpsc::Receiver<Option<Proxy>>,
     counter: Arc<AtomicUsize>,
     providers: Vec<Arc<dyn IProxyTrait + Send + Sync>>,
 }
@@ -94,6 +94,7 @@ impl ProxyFetcher {
                 timer.elapsed(),
                 total_proxies
             );
+            sender.send(None).unwrap_or_default();
         });
         Ok(handle)
     }
@@ -103,10 +104,6 @@ impl Iterator for ProxyFetcher {
     type Item = Proxy;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Ok(proxy) = self.receiver.recv_timeout(Duration::from_millis(3000)) {
-            Some(proxy)
-        } else {
-            None
-        }
+        self.receiver.recv().unwrap_or_default()
     }
 }
