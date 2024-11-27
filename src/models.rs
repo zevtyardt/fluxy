@@ -10,14 +10,31 @@ pub enum Anonymity {
     Unknown,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub enum Protocol {
-    Http,
+    Http(Anonymity),
     Https,
     Socks4,
     Socks5,
-    Connect25,
-    Connect80,
+    Connect(u16),
+}
+
+impl Display for Protocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Http(anonimity) => match anonimity {
+                Anonymity::Unknown => write!(f, "HTTP"),
+                Anonymity::Elite => write!(f, "HTTP: Elite"),
+                Anonymity::Transparent => write!(f, "HTTP: Transparent"),
+                Anonymity::Anonymous => write!(f, "HTTP: Anonymous"),
+            },
+
+            Self::Https => write!(f, "HTTPS"),
+            Self::Socks4 => write!(f, "SOCKS4"),
+            Self::Socks5 => write!(f, "SOCKS5"),
+            Self::Connect(port) => write!(f, "CONNECT:{}", port),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -40,8 +57,8 @@ pub struct Proxy {
     pub ip: Ipv4Addr,
     pub port: u16,
     pub country: Country,
-    pub anonymity: Anonymity,
-    pub protocols: Vec<Protocol>,
+    pub avg_response_time: f64,
+    pub protocols: Vec<Arc<Protocol>>,
 }
 
 impl Default for Proxy {
@@ -50,7 +67,7 @@ impl Default for Proxy {
             ip: Ipv4Addr::new(0, 0, 0, 0),
             port: 0,
             country: Country::Unknown,
-            anonymity: Anonymity::Unknown,
+            avg_response_time: 0.0,
             protocols: vec![],
         }
     }
@@ -58,27 +75,45 @@ impl Default for Proxy {
 
 impl Display for Proxy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<Proxy {} {}:{}>", self.country, self.ip, self.port)
+        write!(
+            f,
+            "<Proxy {} {:.2}s [{}] {}:{}>",
+            self.country,
+            self.avg_response_time,
+            self.protocols
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
+            self.ip,
+            self.port
+        )
     }
 }
 
 pub struct Source {
     pub url: Url,
-    pub default_protocols: Vec<Protocol>,
+    pub default_protocols: Vec<Arc<Protocol>>,
 }
 
 impl Source {
-    pub fn default(url: &str) -> Self {
+    pub fn new(url: &str, protocols: Vec<Protocol>) -> Self {
+        let protocols = if protocols.is_empty() {
+            vec![
+                Arc::new(Protocol::Http(Anonymity::Unknown)),
+                Arc::new(Protocol::Https),
+                Arc::new(Protocol::Socks4),
+                Arc::new(Protocol::Socks5),
+                Arc::new(Protocol::Connect(25)),
+                Arc::new(Protocol::Connect(80)),
+            ]
+        } else {
+            protocols.into_iter().map(Arc::new).collect()
+        };
+
         Self {
             url: Url::parse(url).unwrap(),
-            default_protocols: vec![
-                Protocol::Http,
-                Protocol::Https,
-                Protocol::Socks4,
-                Protocol::Socks5,
-                Protocol::Connect25,
-                Protocol::Connect80,
-            ],
+            default_protocols: protocols,
         }
     }
 }
