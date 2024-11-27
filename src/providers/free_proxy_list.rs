@@ -40,7 +40,8 @@ impl IProxyTrait for FreeProxyListProvider {
     }
 
     async fn scrape(
-        &self, html: Html, tx: &mpsc::SyncSender<Proxy>, counter: &Arc<AtomicUsize>,
+        &self, html: Html, tx: &mpsc::SyncSender<Option<Proxy>>,
+        counter: &Arc<AtomicUsize>,
     ) -> anyhow::Result<Vec<Source>> {
         if let Some(table) = html.select(&self.table).next() {
             for row in table.select(&self.row) {

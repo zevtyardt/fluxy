@@ -15,13 +15,15 @@ pub trait IProxyTrait {
     async fn fetch(&self, client: &Client, url: Url) -> anyhow::Result<Html>;
 
     async fn scrape(
-        &self, html: Html, tx: &mpsc::SyncSender<Proxy>, counter: &Arc<AtomicUsize>,
+        &self, html: Html, tx: &mpsc::SyncSender<Option<Proxy>>,
+        counter: &Arc<AtomicUsize>,
     ) -> anyhow::Result<Vec<Source>>;
 
     fn send(
-        &self, proxy: Proxy, tx: &mpsc::SyncSender<Proxy>, counter: &Arc<AtomicUsize>,
+        &self, proxy: Proxy, tx: &mpsc::SyncSender<Option<Proxy>>,
+        counter: &Arc<AtomicUsize>,
     ) {
-        if let Err(e) = tx.send(proxy) {
+        if let Err(e) = tx.send(Some(proxy)) {
             #[cfg(feature = "log")]
             log::error!("Failed to send proxy, reason: {}", e);
         } else {
