@@ -11,10 +11,9 @@ async fn main() -> anyhow::Result<()> {
     f.use_default_providers();
     let handle = f.gather().await?;
 
-    for p in f {
-        #[cfg(feature = "log")]
-        log::info!("{}", p);
-    }
+    #[cfg(feature = "log")]
+    log::info!("{}", f.count());
     handle.await?;
+
     Ok(())
 }
