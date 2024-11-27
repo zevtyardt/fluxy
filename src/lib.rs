@@ -8,7 +8,6 @@ pub fn setup_log(log_level: log::LevelFilter) -> anyhow::Result<()> {
     #[cfg(feature = "log")]
     stderrlog::new()
         .module(module_path!())
-        .timestamp(stderrlog::Timestamp::Second)
         .verbosity(log_level)
         .init()?;
     Ok(())
