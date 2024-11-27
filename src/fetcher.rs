@@ -43,9 +43,6 @@ impl ProxyFetcher {
 
     #[allow(unused_must_use)]
     pub async fn gather(&self) -> anyhow::Result<JoinHandle<()>> {
-        #[cfg(feature = "log")]
-        log::debug!("Proxy gather started.");
-
         let ua = UserAgent().fake::<&str>();
         let client = ClientBuilder::new()
             .timeout(Duration::from_secs(3))
@@ -53,39 +50,43 @@ impl ProxyFetcher {
             .danger_accept_invalid_certs(true)
             .danger_accept_invalid_hostnames(true)
             .build()?;
-        #[cfg(feature = "log")]
-        log::debug!("Creating client with user-agent: {}", ua);
-
         let counter = self.counter.clone();
         counter.store(0, std::sync::atomic::Ordering::Relaxed);
 
         let providers = self.providers.clone();
         let sender = self.sender.clone();
+
         let handle = tokio::spawn(async move {
-            let timer = time::Instant::now();
-            let pool = Pool::bounded(5);
+            let mut tasks = vec![];
             for provider in providers.iter() {
+                for source in provider.sources() {
+                    tasks.push((Arc::new(source), Arc::clone(provider)));
+                }
+            }
+
+            #[cfg(feature = "log")]
+            log::debug!("Searching proxies from {} available sources", tasks.len(),);
+
+            let timer = time::Instant::now();
+            let pool = Pool::bounded(10);
+            for (source, provider) in tasks.iter() {
+                let source = Arc::clone(source);
                 let provider = Arc::clone(provider);
-                let client = client.clone();
+
                 let tx = sender.clone();
+                let client = client.clone();
                 let counter = Arc::clone(&counter);
                 pool.spawn(async move {
-                    let mut sources = provider.sources();
-                    while let Some(source) = sources.pop() {
-                        if let Ok(html) = provider.fetch(&client, source.url).await {
-                            if let Ok(next_sources) =
-                                provider.scrape(html, &tx, &counter).await
-                            {
-                                sources.extend(next_sources);
-                            }
-                        }
+                    if let Ok(html) = provider.fetch(&client, source.url.as_ref()).await {
+                        let protocols = source.default_protocols.clone();
+                        provider.scrape(html, &tx, &counter, protocols).await;
                     }
                 })
                 .await;
             }
 
             while pool.busy_permits().unwrap_or(0) != 0 {
-                time::sleep(Duration::from_millis(250)).await;
+                time::sleep(Duration::from_millis(50)).await;
             }
             let total_proxies = counter.load(std::sync::atomic::Ordering::Acquire);
             #[cfg(feature = "log")]
