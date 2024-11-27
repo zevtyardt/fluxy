@@ -1,4 +1,5 @@
 use std::{
+    default,
     net::Ipv4Addr,
     sync::{atomic::AtomicUsize, mpsc, Arc},
 };
@@ -9,7 +10,7 @@ use reqwest::{Client, Url};
 use scraper::{Html, Selector};
 
 use super::IProxyTrait;
-use crate::models::{Proxy, Source};
+use crate::models::{Anonymity, Protocol, Proxy, Source};
 
 pub struct FreeProxyListProvider {
     table: Selector,
@@ -30,10 +31,51 @@ impl Default for FreeProxyListProvider {
 #[async_trait]
 impl IProxyTrait for FreeProxyListProvider {
     fn sources(&self) -> Vec<Source> {
-        vec![Source::default("https://free-proxy-list.net/")]
+        vec![
+            Source::new(
+                "https://www.sslproxies.org/",
+                vec![
+                    Protocol::Http(Anonymity::Unknown),
+                    Protocol::Https,
+                    Protocol::Connect(80),
+                    Protocol::Connect(25),
+                ],
+            ),
+            Source::new(
+                "https://free-proxy-list.net/uk-proxy.html",
+                vec![
+                    Protocol::Http(Anonymity::Unknown),
+                    Protocol::Https,
+                    Protocol::Connect(80),
+                    Protocol::Connect(25),
+                ],
+            ),
+            Source::new(
+                "https://www.us-proxy.org/",
+                vec![
+                    Protocol::Http(Anonymity::Unknown),
+                    Protocol::Https,
+                    Protocol::Connect(80),
+                    Protocol::Connect(25),
+                ],
+            ),
+            Source::new(
+                "https://free-proxy-list.net/",
+                vec![
+                    Protocol::Http(Anonymity::Unknown),
+                    Protocol::Https,
+                    Protocol::Connect(80),
+                    Protocol::Connect(25),
+                ],
+            ),
+            Source::new(
+                "https://socks-proxy.net/",
+                vec![Protocol::Socks4, Protocol::Socks5],
+            ),
+        ]
     }
 
-    async fn fetch(&self, client: &Client, url: Url) -> anyhow::Result<Html> {
+    async fn fetch(&self, client: &Client, url: &str) -> anyhow::Result<Html> {
         let response = client.get(url).send().await?;
         let text = response.text().await?;
         Ok(Html::parse_document(&text))
@@ -41,7 +83,7 @@ impl IProxyTrait for FreeProxyListProvider {
 
     async fn scrape(
         &self, html: Html, tx: &mpsc::SyncSender<Option<Proxy>>,
-        counter: &Arc<AtomicUsize>,
+        counter: &Arc<AtomicUsize>, default_protocols: Vec<Arc<Protocol>>,
     ) -> anyhow::Result<Vec<Source>> {
         if let Some(table) = html.select(&self.table).next() {
             for row in table.select(&self.row) {
@@ -51,10 +93,12 @@ impl IProxyTrait for FreeProxyListProvider {
                         let proxy = Proxy {
                             ip,
                             port,
+                            protocols: default_protocols.clone(),
                             ..Default::default()
                         };
-                        self.send(proxy, tx, counter);
-                        break;
+                        if !self.send(proxy, tx, counter) {
+                            break;
+                        };
                     }
                 }
             }
