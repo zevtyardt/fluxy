@@ -75,12 +75,6 @@ impl IProxyTrait for FreeProxyListProvider {
         ]
     }
 
-    async fn fetch(&self, client: &Client, url: &str) -> anyhow::Result<Html> {
-        let response = client.get(url).send().await?;
-        let text = response.text().await?;
-        Ok(Html::parse_document(&text))
-    }
-
     async fn scrape(
         &self, html: Html, tx: &mpsc::SyncSender<Option<Proxy>>,
         counter: &Arc<AtomicUsize>, default_protocols: Vec<Arc<Protocol>>,
