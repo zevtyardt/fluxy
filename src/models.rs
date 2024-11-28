@@ -2,7 +2,7 @@ use std::{fmt::Display, net::Ipv4Addr, sync::Arc};
 
 use reqwest::Url;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Anonymity {
     Elite,
     Transparent,
@@ -10,7 +10,7 @@ pub enum Anonymity {
     Unknown,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Protocol {
     Http(Anonymity),
     Https,
