@@ -7,12 +7,17 @@ use scraper::Html;
 use crate::models::{Anonymity, Protocol, Proxy, Source};
 
 pub mod free_proxy_list;
+pub mod github;
 
 #[async_trait]
 pub trait IProxyTrait {
     fn sources(&self) -> Vec<Source>;
 
-    async fn fetch(&self, client: &Client, url: &str) -> anyhow::Result<Html>;
+    async fn fetch(&self, client: &Client, url: &str) -> anyhow::Result<Html> {
+        let response = client.get(url).send().await?;
+        let text = response.text().await?;
+        Ok(Html::parse_document(&text))
+    }
 
     async fn scrape(
         &self, html: Html, tx: &mpsc::SyncSender<Option<Proxy>>,
